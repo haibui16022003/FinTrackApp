@@ -18,11 +18,23 @@ import { apiBaseUrl } from "../../config";
 import { BarChart, LineChart, LineChartBicolor, PieChart, PopulationPyramid } from "react-native-gifted-charts";
 import SelectDropdown from "react-native-select-dropdown";
 
+const colors = {
+    Shopping: "#FCAC12",
+    Food: "#FD3C4A",
+    Subscription: "#7F3DFF",
+    Salary: "#00A86B",
+    Transporting: "#0077FF",
+    Travel: "#0077FA",
+};
+
 export default function ChartReport({ route, navigation }) {
     const [chartType, setChartType] = useState("LineChart");
     const [transactionType, setTransactionType] = useState("Expense");
     const [categoryType, setCategoryType] = useState("Category");
     const [transactionList, setTransactionList] = useState();
+    const [lineChartData, setLineChartData] = useState([]);
+    const [pieChartData, setPieChartData] = useState([]);
+    const [filterTime, setFilterTime] = useState("Month");
 
     const lineData = [
         { value: 10 },
@@ -82,9 +94,44 @@ export default function ChartReport({ route, navigation }) {
     const getTransactionList = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`${apiBaseUrl}/transactions?userId=${user._id}&type=${transactionType}`);
+            const response = await axios.get(
+                `${apiBaseUrl}/transactions?userId=${user._id}&type=${transactionType}&filterTime=${filterTime}`
+            );
             if (response.status === 200) {
                 setTransactionList(response.data);
+
+                //handle data of line chart
+                setLineChartData(
+                    response.data.map((item) => {
+                        return {
+                            value: item.money,
+                        };
+                    })
+                );
+
+                //handle data of pie chart
+                const moneyTotal = calcMoneyTotal(response.data);
+                setPieChartData(() => {
+                    if (transactionType === "Expense") {
+                        const categoryList = ["Shopping", "Food", "Travel", "Subscription", "Transporting"];
+                        const result = categoryList.map((category) => {
+                            return {
+                                value: Math.floor(
+                                    (response.data.reduce((result, transaction) => {
+                                        return transaction.categoryName === category
+                                            ? result + transaction.money
+                                            : result;
+                                    }, 0) *
+                                        100) /
+                                        moneyTotal
+                                ),
+                                color: colors[category],
+                            };
+                        });
+                        setPieChartData(result.filter((element) => element.value > 0));
+                    }
+                });
+
                 setLoading(false);
             } else {
                 console.log("Error:", response.data.message);
@@ -97,76 +144,9 @@ export default function ChartReport({ route, navigation }) {
         }
     };
 
-    const customDataPoint = () => {
-        return (
-            <View
-                style={{
-                    width: 20,
-                    height: 20,
-                    backgroundColor: "white",
-                    borderWidth: 4,
-                    borderRadius: 10,
-                    borderColor: "#07BAD1",
-                }}
-            />
-        );
-    };
-    const customLabel = (val) => {
-        return (
-            <View style={{ width: 70, marginLeft: 7 }}>
-                <Text style={{ color: "white", fontWeight: "bold" }}>{val}</Text>
-            </View>
-        );
-    };
-
-    const data = [
-        {
-            value: 132,
-        },
-        {
-            value: 100,
-        },
-        {
-            value: 140,
-        },
-        {
-            value: 250,
-        },
-        {
-            value: 290,
-        },
-        {
-            value: 103,
-        },
-        {
-            value: 200,
-        },
-        {
-            value: 300,
-        },
-        {
-            value: 280,
-        },
-        {
-            value: 180,
-        },
-        {
-            value: 150,
-        },
-        {
-            value: 150,
-        },
-    ];
-
-    const pieData = [
-        { value: 54, color: "#177AD5" },
-        { value: 40, color: "#79D2DE" },
-        { value: 20, color: "#ED6665" },
-    ];
-
     useEffect(() => {
         getTransactionList();
-    }, [transactionType]);
+    }, [transactionType, filterTime]);
 
     return (
         <View style={styles.container}>
@@ -180,12 +160,40 @@ export default function ChartReport({ route, navigation }) {
                 </View>
 
                 <View style={styles.header}>
-                    <TouchableOpacity>
-                        <View style={[styles.timeSelector]}>
-                            <ArrowDownIcon width={24} height={24} fill={primaryColor} />
-                            <Text style={{ marginLeft: 5, fontSize: 14, fontWeight: "bold" }}>Month</Text>
-                        </View>
-                    </TouchableOpacity>
+                    <SelectDropdown
+                        data={["Today", "Week", "Month", "Year"]}
+                        onSelect={(selectedItem, index) => {
+                            console.log(selectedItem, index);
+                            setFilterTime(selectedItem);
+                        }}
+                        renderButton={(selectedItem, isOpened) => {
+                            return (
+                                <TouchableOpacity>
+                                    <View style={[styles.timeSelector]}>
+                                        <ArrowDownIcon width={24} height={24} fill={primaryColor} />
+                                        <Text style={{ marginLeft: 5, fontSize: 14, fontWeight: "bold" }}>
+                                            {filterTime}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        }}
+                        renderItem={(item, index, isSelected) => {
+                            return (
+                                <View
+                                    style={{
+                                        ...styles.dropdownItemStyle,
+                                        ...(isSelected && { backgroundColor: "#D2D9DF" }),
+                                    }}
+                                >
+                                    <Text style={styles.dropdownItemTxtStyle}>{item}</Text>
+                                </View>
+                            );
+                        }}
+                        showsVerticalScrollIndicator={false}
+                        dropdownStyle={styles.dropdownMenuStyle}
+                    />
+
                     <View style={styles.chartSelectContainer}>
                         {renderChartSelectItem("LineChart")}
                         {renderChartSelectItem("PieChart")}
@@ -206,7 +214,7 @@ export default function ChartReport({ route, navigation }) {
                         color={primaryColor}
                         noOfSections={3}
                         areaChart
-                        data={data}
+                        data={lineChartData}
                         curved
                         startFillColor={primaryColor}
                         endFillColor={primaryColor}
@@ -217,17 +225,17 @@ export default function ChartReport({ route, navigation }) {
                         yAxisColor={primaryColor}
                         xAxisColor={primaryColor}
                         // hideAxesAndRules
-                        hideDataPoints
+                        // hideDataPoints
                         height={180}
                     />
                 ) : (
                     <PieChart
-                        data={pieData}
+                        data={pieChartData}
                         radius={150}
                         donut
                         showText
-                        showValuesAsLabels
-                        showTextBackground
+                        // showValuesAsLabels
+                        // showTextBackground
                         textBackgroundColor="#333"
                         textBackgroundRadius={22}
                         textColor="white"
@@ -242,7 +250,7 @@ export default function ChartReport({ route, navigation }) {
                             );
                         }}
                         height={180}
-                        innerRadius={100}
+                        innerRadius={120}
                     />
                 )}
             </View>

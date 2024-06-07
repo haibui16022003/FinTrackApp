@@ -116,10 +116,10 @@ export default function BudgetReport({ route, navigation }) {
                                 }}
                             >{`${count} of ${total} Budget exceed the limit`}</Text>
                             <View style={{ marginTop: 24 }}>
-                                {exceedBudgets.map((budget) => {
+                                {exceedBudgets.map((budget, index) => {
                                     const { categoryName } = budget;
                                     return (
-                                        <View style={styles.categoryContainer}>
+                                        <View key={index} style={styles.categoryContainer}>
                                             {renderIcon(categoryName)}
                                             <Text style={styles.categoryName}>{categoryName}</Text>
                                         </View>
